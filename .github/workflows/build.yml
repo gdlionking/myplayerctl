@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
         
@@ -70,7 +70,8 @@ jobs:
         tar -czf playerctl-arm64.tar.gz playerctl
         
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: playerctl-arm64
         path: builddir/playerctl-arm64.tar.gz
+        retention-days: 90
