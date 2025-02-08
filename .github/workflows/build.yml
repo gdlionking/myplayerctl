@@ -1,4 +1,4 @@
-name: Build playerctl for ARM64
+name: Build playerctl for ARM64_playerctl
 
 on:
   push:
