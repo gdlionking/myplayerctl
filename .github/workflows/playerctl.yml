@@ -1,4 +1,4 @@
-name: Build Playerctl for ARM64
+name: Playerctl for ARM64
 
 on:
   push:
@@ -19,6 +19,7 @@ jobs:
 
     - name: Install dependencies
       run: |
+        sudo dpkg --add-architecture arm64
         sudo apt-get update
         sudo apt-get install -y \
           gcc-aarch64-linux-gnu \
@@ -26,8 +27,10 @@ jobs:
           meson \
           ninja-build \
           pkg-config \
-          libglib2.0-dev \
-          libgirepository1.0-dev \
+          libglib2.0-dev:arm64 \
+          libgirepository1.0-dev:arm64 \
+          libgio-2.0-0:arm64 \
+          libgobject-2.0-0:arm64 \
           gobject-introspection \
           libtool
 
@@ -39,10 +42,11 @@ jobs:
         cpp = 'aarch64-linux-gnu-g++'
         ar = 'aarch64-linux-gnu-ar'
         strip = 'aarch64-linux-gnu-strip'
-        pkg-config = 'pkg-config'
+        pkg-config = 'aarch64-linux-gnu-pkg-config'
 
-        [built-in options]
-        pkg_config_path = '/usr/lib/aarch64-linux-gnu/pkgconfig'
+        [properties]
+        sys_root = '/usr/aarch64-linux-gnu'
+        pkg_config_libdir = '/usr/lib/aarch64-linux-gnu/pkgconfig'
 
         [host_machine]
         system = 'linux'
@@ -51,22 +55,35 @@ jobs:
         endian = 'little'
         EOF
 
+        # Create a wrapper for pkg-config to handle cross-compilation
+        sudo tee /usr/bin/aarch64-linux-gnu-pkg-config << 'EOF' > /dev/null
+        #!/bin/sh
+        export PKG_CONFIG_PATH=
+        export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig
+        export PKG_CONFIG_SYSROOT_DIR=/usr/aarch64-linux-gnu
+        exec pkg-config "$@"
+        EOF
+        sudo chmod +x /usr/bin/aarch64-linux-gnu-pkg-config
+
     - name: Configure build
       run: |
         meson setup builddir \
           --cross-file cross-file.txt \
+          --prefix=/usr \
           -Dgtk-doc=false \
-          -Dintrospection=false
+          -Dintrospection=false \
+          --libdir=lib/aarch64-linux-gnu
 
     - name: Build
       run: ninja -C builddir
 
     - name: Create package
       run: |
-        mkdir -p artifact/bin
+        mkdir -p artifact/bin artifact/lib
         cp builddir/playerctl/playerctl artifact/bin/
-        cp builddir/playerctl/libplayerctl.so* artifact/bin/
-        strip artifact/bin/*
+        cp builddir/playerctl/playerctld artifact/bin/
+        cp builddir/playerctl/libplayerctl.so* artifact/lib/
+        strip artifact/bin/* artifact/lib/*
         tar czf playerctl-arm64.tar.gz -C artifact .
 
     - name: Upload artifact
