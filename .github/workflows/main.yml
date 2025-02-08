@@ -1,0 +1,72 @@
+name: Build Playerctl for ARM64
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          meson \
+          ninja-build \
+          gcc-aarch64-linux-gnu \
+          g++-aarch64-linux-gnu \
+          pkg-config \
+          libglib2.0-dev \
+          libjson-glib-dev \
+          libdbus-1-dev \
+          crossbuild-essential-arm64
+
+    - name: Setup cross-compilation environment
+      run: |
+        mkdir -p build-arm64
+        cat > arm64_cross.txt << EOF
+        [binaries]
+        c = 'aarch64-linux-gnu-gcc'
+        cpp = 'aarch64-linux-gnu-g++'
+        ar = 'aarch64-linux-gnu-ar'
+        strip = 'aarch64-linux-gnu-strip'
+        pkgconfig = 'pkg-config'
+        
+        [host_machine]
+        system = 'linux'
+        cpu_family = 'aarch64'
+        cpu = 'aarch64'
+        endian = 'little'
+        EOF
+
+    - name: Configure
+      run: |
+        meson setup build-arm64 \
+          --cross-file arm64_cross.txt \
+          -Dgtk-doc=false \
+          -Dintrospection=false \
+          -Dbash-completions=false \
+          -Dzsh-completions=false \
+          -Dfish-completions=false
+
+    - name: Build
+      run: ninja -C build-arm64
+
+    - name: Package
+      run: |
+        mkdir -p artifacts
+        cp build-arm64/playerctl/playerctl artifacts/
+        cp build-arm64/playerctl/libplayerctl-2.so.0 artifacts/
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: playerctl-arm64
+        path: artifacts/
