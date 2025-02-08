@@ -23,6 +23,7 @@ jobs:
 
       - name: Clone Playerctl repository
         run: |
+          rm -rf playerctl  # 先删除已存在的目录
           git clone https://github.com/altdesktop/playerctl.git
           cd playerctl
           git checkout $(git describe --tags `git rev-list --tags --max-count=1`)
