@@ -1,0 +1,74 @@
+name: Build Playerctl for ARM64
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        repository: 'altdesktop/playerctl'
+        submodules: 'recursive'
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          gcc-aarch64-linux-gnu \
+          g++-aarch64-linux-gnu \
+          meson \
+          ninja-build \
+          pkg-config \
+          libglib2.0-dev \
+          libgirepository1.0-dev \
+          gobject-introspection \
+          libtool
+
+    - name: Set up cross-compilation environment
+      run: |
+        cat << EOF > cross-file.txt
+        [binaries]
+        c = 'aarch64-linux-gnu-gcc'
+        cpp = 'aarch64-linux-gnu-g++'
+        ar = 'aarch64-linux-gnu-ar'
+        strip = 'aarch64-linux-gnu-strip'
+        pkgconfig = 'pkg-config'
+
+        [host_machine]
+        system = 'linux'
+        cpu_family = 'aarch64'
+        cpu = 'armv8'
+        endian = 'little'
+        EOF
+
+    - name: Configure build
+      run: |
+        meson setup builddir \
+          --cross-file cross-file.txt \
+          -Dgtk-doc=false \
+          -Dintrospection=false \
+          -Ddev-doc=false
+
+    - name: Build
+      run: ninja -C builddir
+
+    - name: Create package
+      run: |
+        mkdir -p artifact/bin
+        cp builddir/playerctl/playerctl artifact/bin/
+        cp builddir/playerctl/libplayerctl.so* artifact/bin/
+        strip artifact/bin/*
+        tar czf playerctl-arm64.tar.gz -C artifact .
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: playerctl-arm64
+        path: playerctl-arm64.tar.gz
