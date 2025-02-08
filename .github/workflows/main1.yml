@@ -1,0 +1,59 @@
+name: Build playerctl for ARM64
+
+on:
+  push:
+    branches:
+      - main  # 触发编译的分支
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest  # 使用 GitHub 提供的 Ubuntu 环境
+
+    steps:
+      # 1. 检出代码
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 2. 设置 ARM64 环境
+      - name: Set up ARM64 environment
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          export CC=aarch64-linux-gnu-gcc
+          export CXX=aarch64-linux-gnu-g++
+
+      # 3. 安装依赖
+      - name: Install dependencies
+        run: |
+          sudo apt install -y meson ninja-build pkg-config libglib2.0-dev libgirepository1.0-dev gobject-introspection
+
+      # 4. 克隆 playerctl 源码
+      - name: Clone playerctl source
+        run: |
+          git clone https://github.com/altdesktop/playerctl.git
+          cd playerctl
+
+      # 5. 配置和编译
+      - name: Configure and build playerctl
+        run: |
+          cd playerctl
+          meson build --cross-file cross-arm64.txt --prefix=/usr
+          cd build
+          ninja
+
+      # 6. 打包编译结果
+      - name: Package playerctl
+        run: |
+          cd playerctl/build
+          DESTDIR=playerctl-arm64 ninja install
+          tar -czvf playerctl-arm64.tar.gz -C playerctl-arm64 .
+
+      # 7. 上传编译结果
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: playerctl-arm64
+          path: playerctl/build/playerctl-arm64.tar.gz
