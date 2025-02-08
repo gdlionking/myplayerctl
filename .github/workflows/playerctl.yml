@@ -1,4 +1,4 @@
-name: Playerctl for ARM64
+name: I Build Playerctl for ARM64
 
 on:
   push:
@@ -17,9 +17,18 @@ jobs:
         repository: 'altdesktop/playerctl'
         submodules: 'recursive'
 
+    - name: Setup ARM64 repositories
+      run: |
+        sudo sed -i 's/noble/jammy/g' /etc/apt/sources.list
+        sudo dpkg --add-architecture arm64
+        sudo tee /etc/apt/sources.list.d/arm64.list << EOF
+        deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
+        deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
+        deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
+        EOF
+
     - name: Install dependencies
       run: |
-        sudo dpkg --add-architecture arm64
         sudo apt-get update
         sudo apt-get install -y \
           gcc-aarch64-linux-gnu \
