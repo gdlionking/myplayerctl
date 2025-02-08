@@ -21,6 +21,23 @@ jobs:
           sudo apt update
           sudo apt install -y crossbuild-essential-arm64 meson ninja-build git pkg-config
 
+      - name: Create Meson cross-file for ARM64
+        run: |
+          cat <<EOF > arm64-cross.txt
+          [binaries]
+          c = '/usr/bin/aarch64-linux-gnu-gcc'
+          cpp = '/usr/bin/aarch64-linux-gnu-g++'
+          ar = '/usr/bin/aarch64-linux-gnu-ar'
+          strip = '/usr/bin/aarch64-linux-gnu-strip'
+          pkgconfig = '/usr/bin/aarch64-linux-gnu-pkg-config'
+
+          [host_machine]
+          system = 'linux'
+          cpu_family = 'aarch64'
+          cpu = 'aarch64'
+          endian = 'little'
+          EOF
+
       - name: Clone Playerctl repository
         run: |
           rm -rf playerctl  # 先删除已存在的目录
@@ -31,7 +48,7 @@ jobs:
       - name: Build Playerctl for ARM64
         run: |
           cd playerctl
-          meson setup build --cross-file /usr/share/meson/cross/arm64-linux-gnu.txt
+          meson setup build --cross-file ../arm64-cross.txt
           ninja -C build
 
       - name: Package binary
