@@ -1,72 +1,59 @@
-name: Build Playerctl for ARM64
+name: Build playerctl for ARM64
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main  # 触发编译的分支
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    
+    runs-on: ubuntu-latest  # 使用 GitHub 提供的 Ubuntu 环境
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          meson \
-          ninja-build \
-          gcc-aarch64-linux-gnu \
-          g++-aarch64-linux-gnu \
-          pkg-config \
-          libglib2.0-dev \
-          libjson-glib-dev \
-          libdbus-1-dev \
-          crossbuild-essential-arm64
+      # 1. 检出代码
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Setup cross-compilation environment
-      run: |
-        mkdir -p build-arm64
-        cat > arm64_cross.txt << EOF
-        [binaries]
-        c = 'aarch64-linux-gnu-gcc'
-        cpp = 'aarch64-linux-gnu-g++'
-        ar = 'aarch64-linux-gnu-ar'
-        strip = 'aarch64-linux-gnu-strip'
-        pkgconfig = 'pkg-config'
-        
-        [host_machine]
-        system = 'linux'
-        cpu_family = 'aarch64'
-        cpu = 'aarch64'
-        endian = 'little'
-        EOF
+      # 2. 设置 ARM64 环境
+      - name: Set up ARM64 environment
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          export CC=aarch64-linux-gnu-gcc
+          export CXX=aarch64-linux-gnu-g++
 
-    - name: Configure
-      run: |
-        meson setup build-arm64 \
-          --cross-file arm64_cross.txt \
-          -Dgtk-doc=false \
-          -Dintrospection=false \
-          -Dbash-completions=false \
-          -Dzsh-completions=false \
-          -Dfish-completions=false
+      # 3. 安装依赖
+      - name: Install dependencies
+        run: |
+          sudo apt install -y meson ninja-build pkg-config libglib2.0-dev libgirepository1.0-dev gobject-introspection
 
-    - name: Build
-      run: ninja -C build-arm64
+      # 4. 克隆 playerctl 源码
+      - name: Clone playerctl source
+        run: |
+          git clone https://github.com/altdesktop/playerctl.git
+          cd playerctl
 
-    - name: Package
-      run: |
-        mkdir -p artifacts
-        cp build-arm64/playerctl/playerctl artifacts/
-        cp build-arm64/playerctl/libplayerctl-2.so.0 artifacts/
+      # 5. 配置和编译
+      - name: Configure and build playerctl
+        run: |
+          cd playerctl
+          meson build --cross-file cross-arm64.txt --prefix=/usr
+          cd build
+          ninja
 
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: playerctl-arm64
-        path: artifacts/
+      # 6. 打包编译结果
+      - name: Package playerctl
+        run: |
+          cd playerctl/build
+          DESTDIR=playerctl-arm64 ninja install
+          tar -czvf playerctl-arm64.tar.gz -C playerctl-arm64 .
+
+      # 7. 上传编译结果
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: playerctl-arm64
+          path: playerctl/build/playerctl-arm64.tar.gz
