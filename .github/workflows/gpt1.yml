@@ -1,0 +1,46 @@
+name: GPT Build Playerctl for Armbian ARM64
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y crossbuild-essential-arm64 meson ninja-build git pkg-config
+
+      - name: Clone Playerctl repository
+        run: |
+          git clone https://github.com/altdesktop/playerctl.git
+          cd playerctl
+          git checkout $(git describe --tags `git rev-list --tags --max-count=1`)
+
+      - name: Build Playerctl for ARM64
+        run: |
+          cd playerctl
+          meson setup build --cross-file /usr/share/meson/cross/arm64-linux-gnu.txt
+          ninja -C build
+
+      - name: Package binary
+        run: |
+          cd playerctl/build
+          tar -czvf playerctl-arm64.tar.gz playerctl
+          mv playerctl-arm64.tar.gz $GITHUB_WORKSPACE/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: playerctl-arm64
+          path: playerctl-arm64.tar.gz
