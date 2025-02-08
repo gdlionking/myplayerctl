@@ -1,4 +1,4 @@
-name: Build playerctl for ARM64_playerctl
+name: Build Playerctl for Armbian ARM644
 
 on:
   push:
@@ -7,48 +7,55 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:  # 允许手动触发编译
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout playerctl source code
+        uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          autoconf \
-          automake \
-          libtool \
-          pkg-config \
-          gcc-aarch64-linux-gnu \
-          g++-aarch64-linux-gnu \
-          libglib2.0-dev:arm64
+      - name: Install dependencies
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo apt update
+          sudo apt install -y \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            meson ninja-build pkg-config \
+            libglib2.0-dev:arm64 libgobject-2.0-dev:arm64 \
+            gobject-introspection:arm64
 
-    - name: Set up cross-compilation environment
-      run: |
-        export CC=aarch64-linux-gnu-gcc
-        export CXX=aarch64-linux-gnu-g++
-        export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+      - name: Set up cross-compilation file
+        run: |
+          cat <<EOF > cross-file.txt
+          [binaries]
+          c = 'aarch64-linux-gnu-gcc'
+          cpp = 'aarch64-linux-gnu-g++'
+          ar = 'aarch64-linux-gnu-ar'
+          strip = 'aarch64-linux-gnu-strip'
+          pkgconfig = 'pkg-config'
 
-    - name: Generate build system
-      run: |
-        ./autogen.sh
+          [host_machine]
+          system = 'linux'
+          cpu_family = 'aarch64'
+          cpu = 'aarch64'
+          endian = 'little'
 
-    - name: Configure for ARM64
-      run: |
-        ./configure --host=aarch64-linux-gnu --prefix=/usr
+          [paths]
+          prefix = '/usr/aarch64-linux-gnu'
+          libdir = '/usr/lib/aarch64-linux-gnu'
+          bindir = '/usr/bin'
+          includedir = '/usr/include'
+          EOF
 
-    - name: Build playerctl
-      run: |
-        make
+      - name: Build playerctl
+        run: |
+          meson setup builddir --cross-file cross-file.txt
+          ninja -C builddir
 
-    - name: Archive build artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: playerctl-arm64
-        path: |
-          playerctl
-          playerctl-*.tar.gz
+      - name: Archive playerctl binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: playerctl-arm64
+          path: builddir/playerctl
