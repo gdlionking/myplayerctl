@@ -1,4 +1,4 @@
-name: Build Playerctl ARM64
+name: 2025 Build Playerctl ARM64
 
 on:
   workflow_dispatch:
@@ -36,26 +36,35 @@ jobs:
           
           ENV DEBIAN_FRONTEND=noninteractive
           
+          # Install build dependencies
           RUN apt-get update && apt-get install -y --no-install-recommends \
               python3-pip \
+              python3-setuptools \
+              python3-wheel \
               ninja-build \
               build-essential \
               libglib2.0-dev \
               libgirepository1.0-dev \
               gtk-doc-tools \
               dbus-x11 \
-              meson \
-              pkg-config
+              pkg-config \
+              git \
+              && rm -rf /var/lib/apt/lists/*
+          
+          # Install updated meson
+          RUN pip3 install --no-cache-dir meson==0.56.0
           
           WORKDIR /app
           COPY . /app
           
+          # Build playerctl
           RUN meson setup build \
               --prefix=/usr \
               --libdir=/usr/lib/aarch64-linux-gnu \
               -Dgtk-doc=false \
               && ninja -C build \
-              && ninja -C build install
+              && ninja -C build install \
+              && ldconfig
           EOF
           
           # Build image
@@ -66,7 +75,7 @@ jobs:
             -t playerctl-arm64:latest \
             .
           
-          # Run container
+          # Create and start container
           docker run -d --platform linux/arm64 --name playerctl-build \
             playerctl-arm64:latest \
             sleep infinity
