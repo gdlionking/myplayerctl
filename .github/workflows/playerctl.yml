@@ -1,44 +1,9 @@
-name: 1 Build Playerctl for Armbian
-
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Pull Armbian Build Environment
+      - name: 1 Build Playerctl for Armbian
         run: |
-          docker pull armbian/build:latest
-
-      - name: Build Playerctl for Armbian
-        run: |
-          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace armbian/build:latest \
+          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace debian:bookworm \
             bash -c "
-            apt update && apt install -y build-essential meson ninja-build pkg-config libglib2.0-dev libdbus-1-dev libgobject-introspection-dev libjson-glib-dev
+            apt update && apt install -y build-essential meson ninja-build pkg-config libglib2.0-dev libdbus-1-dev libgobject-introspection-dev libjson-glib-dev git
             git clone https://github.com/altdesktop/playerctl.git && cd playerctl
             meson build --prefix=/usr && ninja -C build && ninja -C build install
             cp build/playerctl /workspace/playerctl-armbian
             "
-
-      - name: Upload compiled binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: playerctl-armbian
-          path: playerctl-armbian
