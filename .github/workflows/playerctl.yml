@@ -1,4 +1,4 @@
-name: Build playerctl for Armbian
+name: 1 Build playerctl for Armbian
 
 on:
   push:
