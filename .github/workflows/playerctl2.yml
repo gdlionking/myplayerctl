@@ -1,0 +1,73 @@
+name: Build playerctl for Armbian
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        repository: 'altdesktop/playerctl'
+        ref: 'master'
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          gcc-arm-linux-gnueabihf \
+          g++-arm-linux-gnueabihf \
+          meson \
+          ninja-build \
+          pkg-config \
+          libglib2.0-dev \
+          libdbus-1-dev \
+          libtool \
+          automake \
+          autoconf
+
+    - name: Set up cross compilation environment
+      run: |
+        sudo mkdir -p /etc/meson/cross
+        echo '[binaries]
+        c = "arm-linux-gnueabihf-gcc"
+        cpp = "arm-linux-gnueabihf-g++"
+        ar = "arm-linux-gnueabihf-ar"
+        strip = "arm-linux-gnueabihf-strip"
+        pkgconfig = "pkg-config"
+
+        [host_machine]
+        system = "linux"
+        cpu_family = "arm"
+        cpu = "armv7"
+        endian = "little"' | sudo tee /etc/meson/cross/arm.txt
+
+    - name: Configure build
+      run: |
+        meson setup builddir --cross-file /etc/meson/cross/arm.txt \
+          -Dgtk-doc=false \
+          -Dintrospection=false \
+          -Dbash-completions=false \
+          -Dzsh-completions=false
+
+    - name: Build
+      run: ninja -C builddir
+
+    - name: Package artifacts
+      run: |
+        mkdir -p artifacts
+        cp builddir/playerctl/playerctl artifacts/
+        cp builddir/playerctl/libplayerctl.so* artifacts/
+        arm-linux-gnueabihf-strip artifacts/*
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: playerctl-armbian
+        path: artifacts/
