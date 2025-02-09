@@ -1,13 +1,13 @@
-name: Build Playerctl for Armbian (Docker)
+name: GPT Build Playerctl for Armbian ARM64
 
 on:
   push:
     branches:
       - main
   pull_request:
-  
+    branches:
+      - main
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
