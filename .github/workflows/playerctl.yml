@@ -1,4 +1,4 @@
-name: 1 Build playerctl for Armbian
+name: Build playerctl for Armbian
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   build:
@@ -23,7 +23,8 @@ jobs:
         sudo apt install -y build-essential meson ninja-build \
                             libglib2.0-dev libjson-glib-dev \
                             libdbus-1-dev pkg-config \
-                            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+                            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+                            gobject-introspection libgirepository1.0-dev
 
     - name: 设置交叉编译环境
       run: |
@@ -32,7 +33,7 @@ jobs:
         cpp = 'aarch64-linux-gnu-g++'
         ar = 'aarch64-linux-gnu-ar'
         strip = 'aarch64-linux-gnu-strip'
-        pkgconfig = 'pkg-config'
+        pkg-config = '/usr/bin/pkg-config'
 
         [host_machine]
         system = 'linux'
@@ -42,7 +43,7 @@ jobs:
 
     - name: 编译 playerctl
       run: |
-        meson setup --cross-file=cross.txt build
+        meson setup --cross-file=cross.txt -Dintrospection=false build
         cd build
         ninja
 
@@ -55,9 +56,3 @@ jobs:
       with:
         name: playerctl-armbian
         path: playerctl-armbian.tar.gz
-
-    - name: 创建 GitHub Release（可选）
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
-      with:
-        files: playerctl-armbian.tar.gz
