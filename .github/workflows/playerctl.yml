@@ -43,7 +43,7 @@ jobs:
 
     - name: 编译 playerctl
       run: |
-        meson setup --cross-file=cross.txt -Dintrospection=false build
+        meson setup --cross-file=cross.txt   -Dgtk-doc=false -Dintrospection=false build
         cd build
         ninja
 
