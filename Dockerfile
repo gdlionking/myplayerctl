@@ -1,32 +1,30 @@
-FROM ubuntu:latest
+FROM ubuntu:20.04
 
-# 避免安装过程中的交互式提示
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Etc/UTC
+WORKDIR /app
 
-# 设置时区
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-# 更新包列表并安装依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    meson \
+RUN export DEBIAN_FRONTEND=noninteractive; \
+    export DEBCONF_NONINTERACTIVE_SEEN=true; \
+    echo 'tzdata tzdata/Areas select Etc' | debconf-set-selections; \
+    echo 'tzdata tzdata/Zones/Etc select UTC' | debconf-set-selections; \
+    apt update && apt install -y --no-install-recommends \
+    python3-pip \
     ninja-build \
-    pkg-config \
+    build-essential \
     libglib2.0-dev \
-    gobject-introspection \
     libgirepository1.0-dev \
     gtk-doc-tools \
-    gir1.2-glib-2.0 \
-    python3-pip \
-    dbus-x11 \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    dbus-x11
 
-WORKDIR /src
-COPY . .
+COPY requirements.txt .
+RUN pip3 install -r requirements.txt
 
-RUN meson setup builddir && \
-    cd builddir && \
-    ninja && \
-    ninja install
+ADD . /app
+
+COPY test/data/dbus-system.conf /etc/dbus-1/system.d/test-dbus-system.conf
+
+RUN meson --prefix=/usr build && \
+    ninja -C build && ninja -C build install
+RUN mkdir -p /run/dbus
+ENV PYTHONASYNCIODEBUG=1
+ENV DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+CMD ["bash", "-c", "dbus-daemon --nopidfile --system && dbus-run-session python3 -m pytest -vvs"]
