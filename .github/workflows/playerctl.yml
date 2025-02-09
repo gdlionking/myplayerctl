@@ -21,10 +21,14 @@ jobs:
       run: |
         sudo apt update
         sudo apt install -y build-essential meson ninja-build \
-                            libglib2.0-dev libjson-glib-dev \
-                            libdbus-1-dev pkg-config \
                             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-                            gobject-introspection libgirepository1.0-dev
+                            libglib2.0-dev:arm64 libgobject-2.0-dev:arm64 \
+                            libgio-2.0-dev:arm64 libdbus-1-dev:arm64 \
+                            pkg-config
+
+    - name: 设置 `pkg-config`
+      run: |
+        export PKG_CONFIG_LIBDIR=/usr/aarch64-linux-gnu/lib/pkgconfig:/usr/aarch64-linux-gnu/share/pkgconfig
 
     - name: 设置交叉编译环境
       run: |
@@ -33,7 +37,7 @@ jobs:
         cpp = 'aarch64-linux-gnu-g++'
         ar = 'aarch64-linux-gnu-ar'
         strip = 'aarch64-linux-gnu-strip'
-        pkg-config = '/usr/bin/pkg-config'
+        pkg-config = 'aarch64-linux-gnu-pkg-config'
 
         [host_machine]
         system = 'linux'
@@ -41,13 +45,18 @@ jobs:
         cpu = 'armv8-a'
         endian = 'little'" > cross.txt
 
+    - name: 设置编译环境变量
+      run: |
+        export CFLAGS="-I/usr/aarch64-linux-gnu/include"
+        export LDFLAGS="-L/usr/aarch64-linux-gnu/lib"
+
     - name: 编译 playerctl
       run: |
-        meson setup --cross-file=cross.txt   -Dgtk-doc=false -Dintrospection=false build
+        meson setup --cross-file=cross.txt -Dintrospection=false build
         cd build
         ninja
 
-    - name: 打包为 `.tar.gz`
+    - name: 打包 `.tar.gz`
       run: |
         tar -czvf playerctl-armbian.tar.gz -C build playerctl
 
