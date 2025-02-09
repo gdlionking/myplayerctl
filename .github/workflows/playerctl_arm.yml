@@ -1,0 +1,126 @@
+name: 2025 Build Playerctl ARM64
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag to build (optional)'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          repository: altdesktop/playerctl
+          submodules: recursive
+          ref: ${{ github.event.inputs.tag }}
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Create meson cross file
+        run: |
+          cat > cross-arm64.txt << EOF
+          [binaries]
+          c = 'aarch64-linux-gnu-gcc'
+          cpp = 'aarch64-linux-gnu-g++'
+          ar = 'aarch64-linux-gnu-ar'
+          strip = 'aarch64-linux-gnu-strip'
+          pkgconfig = 'pkg-config'
+
+          [properties]
+          needs_exe_wrapper = true
+
+          [host_machine]
+          system = 'linux'
+          cpu_family = 'aarch64'
+          cpu = 'aarch64'
+          endian = 'little'
+          EOF
+      
+      - name: Build and run container
+        run: |
+          # Create Dockerfile with modified build configuration
+          cat > Dockerfile.arm64 << EOF
+          FROM ubuntu:20.04
+          
+          ENV DEBIAN_FRONTEND=noninteractive
+          RUN apt-get update && apt-get install -y --no-install-recommends \
+              python3-pip \
+              ninja-build \
+              build-essential \
+              libglib2.0-dev \
+              libgirepository1.0-dev \
+              gtk-doc-tools \
+              dbus-x11 \
+              gcc-aarch64-linux-gnu \
+              g++-aarch64-linux-gnu \
+              pkg-config-aarch64-linux-gnu \
+              crossbuild-essential-arm64
+          
+          WORKDIR /app
+          COPY . /app
+          COPY cross-arm64.txt /app/
+          
+          RUN meson setup --cross-file cross-arm64.txt \
+              -Ddefault_library=static \
+              -Dbuildtype=debugoptimized \
+              --prefix=/usr \
+              -Dstrip=true \
+              build && \
+              ninja -C build && \
+              ninja -C build install
+          EOF
+          
+          # Build the image
+          docker buildx build \
+            --platform linux/arm64 \
+            --load \
+            -f Dockerfile.arm64 \
+            -t playerctl-arm64:latest \
+            .
+          
+          # Create and start container
+          docker run -d --platform linux/arm64 --name playerctl-build \
+            playerctl-arm64:latest \
+            sleep infinity
+          
+          # Create artifacts directory
+          mkdir -p artifacts
+          
+          # Copy build artifacts and dependencies
+          echo "Copying build artifacts..."
+          docker cp playerctl-build:/usr/bin/playerctl artifacts/
+          docker cp playerctl-build:/usr/lib/aarch64-linux-gnu/. artifacts/lib/
+          
+          # Create debug info
+          echo "Creating debug information..."
+          docker exec playerctl-build aarch64-linux-gnu-objdump -T /usr/bin/playerctl > artifacts/playerctl.symbols
+          
+          # Stop and remove container
+          docker stop playerctl-build
+          docker rm playerctl-build
+      
+      - name: List artifacts
+        run: |
+          echo "Build artifacts:"
+          ls -lah artifacts/
+          echo "Symbols in playerctl:"
+          cat artifacts/playerctl.symbols
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: playerctl-arm64-build
+          path: artifacts/
+          retention-days: 7
