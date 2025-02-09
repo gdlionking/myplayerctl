@@ -1,33 +1,25 @@
-name: Docker Build playerctl for Armbian (ARM64)
+name: Manual Build Playerctl for Armbian
 
 on:
-  workflow_dispatch:  # 允许手动触发工作流
+  workflow_dispatch:  # 仅手动触发
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # 使用 GitHub 提供的 Ubuntu 环境
-
+    runs-on: ubuntu-20.04  # 使用 Ubuntu 20.04 作为宿主机环境
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3  # 检出代码
+      - name: 检出代码
+        uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2  # 设置 QEMU 以支持 ARM64 构建
+      - name: 设置 QEMU
+        uses: docker/setup-qemu-action@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2  # 设置 Docker Buildx 以支持多架构构建
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build ARM64 Docker image
+      - name: 构建 Armbian 适配的 Docker 镜像（基于 ubuntu:20.04）
         run: |
-          docker buildx create --use
-          docker buildx build --platform linux/arm64 -t playerctl-armbian -f Dockerfile .
+          docker buildx build --platform linux/arm64 -t playerctl-armbian:latest --load --build-arg BASE_IMAGE=ubuntu:20.04 .
 
-      - name: Run ARM64 Docker container and compile playerctl
+      - name: 运行测试
         run: |
-          docker run --platform linux/arm64 -v $(pwd):/output playerctl-armbian sh -c "cd /app && meson --prefix=/usr build && ninja -C build && ninja -C build install && cp -r /app/build /output"
-
-      - name: Archive build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: playerctl-armbian-build
-          path: build/
+          docker run --rm playerctl-armbian:latest bash -c "dbus-daemon --nopidfile --system && dbus-run-session python3 -m pytest -vvs"
