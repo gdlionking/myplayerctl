@@ -1,4 +1,4 @@
-name: 2025 Build Playerctl ARM64
+name: Build Playerctl ARM64
 
 on:
   workflow_dispatch:
@@ -28,33 +28,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
-      - name: Create meson cross file
-        run: |
-          cat > cross-arm64.txt << EOF
-          [binaries]
-          c = 'aarch64-linux-gnu-gcc'
-          cpp = 'aarch64-linux-gnu-g++'
-          ar = 'aarch64-linux-gnu-ar'
-          strip = 'aarch64-linux-gnu-strip'
-          pkgconfig = 'pkg-config'
-
-          [properties]
-          needs_exe_wrapper = true
-
-          [host_machine]
-          system = 'linux'
-          cpu_family = 'aarch64'
-          cpu = 'aarch64'
-          endian = 'little'
-          EOF
-      
       - name: Build and run container
         run: |
-          # Create Dockerfile with modified build configuration
+          # Create Dockerfile
           cat > Dockerfile.arm64 << EOF
           FROM ubuntu:20.04
           
           ENV DEBIAN_FRONTEND=noninteractive
+          
           RUN apt-get update && apt-get install -y --no-install-recommends \
               python3-pip \
               ninja-build \
@@ -63,26 +44,21 @@ jobs:
               libgirepository1.0-dev \
               gtk-doc-tools \
               dbus-x11 \
-              gcc-aarch64-linux-gnu \
-              g++-aarch64-linux-gnu \
-              pkg-config-aarch64-linux-gnu \
-              crossbuild-essential-arm64
+              meson \
+              pkg-config
           
           WORKDIR /app
           COPY . /app
-          COPY cross-arm64.txt /app/
           
-          RUN meson setup --cross-file cross-arm64.txt \
-              -Ddefault_library=static \
-              -Dbuildtype=debugoptimized \
+          RUN meson setup build \
               --prefix=/usr \
-              -Dstrip=true \
-              build && \
-              ninja -C build && \
-              ninja -C build install
+              --libdir=/usr/lib/aarch64-linux-gnu \
+              -Dgtk-doc=false \
+              && ninja -C build \
+              && ninja -C build install
           EOF
           
-          # Build the image
+          # Build image
           docker buildx build \
             --platform linux/arm64 \
             --load \
@@ -90,37 +66,55 @@ jobs:
             -t playerctl-arm64:latest \
             .
           
-          # Create and start container
+          # Run container
           docker run -d --platform linux/arm64 --name playerctl-build \
             playerctl-arm64:latest \
             sleep infinity
           
-          # Create artifacts directory
-          mkdir -p artifacts
+          # Create artifacts directory structure
+          mkdir -p artifacts/playerctl/usr/{bin,lib/aarch64-linux-gnu}
           
-          # Copy build artifacts and dependencies
-          echo "Copying build artifacts..."
-          docker cp playerctl-build:/usr/bin/playerctl artifacts/
-          docker cp playerctl-build:/usr/lib/aarch64-linux-gnu/. artifacts/lib/
+          # Copy files
+          docker cp playerctl-build:/usr/bin/playerctl artifacts/playerctl/usr/bin/
+          docker cp playerctl-build:/usr/lib/aarch64-linux-gnu/libplayerctl.so.2.0.0 artifacts/playerctl/usr/lib/aarch64-linux-gnu/
           
-          # Create debug info
-          echo "Creating debug information..."
-          docker exec playerctl-build aarch64-linux-gnu-objdump -T /usr/bin/playerctl > artifacts/playerctl.symbols
+          # Create symlinks
+          cd artifacts/playerctl/usr/lib/aarch64-linux-gnu
+          ln -s libplayerctl.so.2.0.0 libplayerctl.so.2
+          ln -s libplayerctl.so.2 libplayerctl.so
+          cd ../../../../
           
-          # Stop and remove container
+          # Create install script
+          cat > artifacts/playerctl/install.sh << 'EOF'
+          #!/bin/bash
+          
+          # Create directories if they don't exist
+          sudo mkdir -p /usr/bin
+          sudo mkdir -p /usr/lib/aarch64-linux-gnu
+          
+          # Copy files
+          sudo cp usr/bin/playerctl /usr/bin/
+          sudo cp -P usr/lib/aarch64-linux-gnu/libplayerctl* /usr/lib/aarch64-linux-gnu/
+          
+          # Update library cache
+          sudo ldconfig
+          
+          echo "Installation completed. Try running 'playerctl --version'"
+          EOF
+          
+          chmod +x artifacts/playerctl/install.sh
+          
+          # Create tarball
+          cd artifacts
+          tar czf playerctl-arm64.tar.gz playerctl/
+          
+          # Clean up
           docker stop playerctl-build
           docker rm playerctl-build
-      
-      - name: List artifacts
-        run: |
-          echo "Build artifacts:"
-          ls -lah artifacts/
-          echo "Symbols in playerctl:"
-          cat artifacts/playerctl.symbols
       
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: playerctl-arm64-build
-          path: artifacts/
+          name: playerctl-arm64
+          path: artifacts/playerctl-arm64.tar.gz
           retention-days: 7
