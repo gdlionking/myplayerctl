@@ -1,4 +1,4 @@
-name: Docker Build Playerctl for Armbian (Docker)
+name: Build Playerctl for Armbian (QEMU)
 
 on:
   push:
@@ -11,16 +11,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 检出代码
+      - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: 在 `arm64` Docker 容器中编译
+      - name: Install QEMU and create ARM64 root filesystem
         run: |
-          docker run --rm -v $(pwd):/workspace -w /workspace arm64v8/ubuntu bash -c "
+          sudo apt update
+          sudo apt install -y qemu-user-static debootstrap binfmt-support
+          
+          # Create ARM64 root filesystem
+          sudo debootstrap --arch=arm64 focal rootfs http://ports.ubuntu.com/
+          sudo cp /usr/bin/qemu-aarch64-static rootfs/usr/bin/
+
+      - name: Enter ARM64 Ubuntu and install dependencies
+        run: |
+          sudo chroot rootfs /bin/bash -c "
             apt update &&
             apt install -y build-essential meson ninja-build &&
             apt install -y libglib2.0-dev libgobject-2.0-dev libgio-2.0-dev &&
-            apt install -y libdbus-1-dev libjson-glib-dev libreadline-dev bash-completion &&
+            apt install -y libdbus-1-dev libjson-glib-dev libreadline-dev bash-completion
+          "
+
+      - name: Enter ARM64 Ubuntu and compile
+        run: |
+          sudo chroot rootfs /bin/bash -c "
+            cd /workspace &&
             meson setup build &&
             ninja -C build
           "
