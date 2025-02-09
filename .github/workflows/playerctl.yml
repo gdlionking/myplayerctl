@@ -1,19 +1,26 @@
-- name: 安装 QEMU 并设置 `arm64` Ubuntu
-  run: |
-    sudo apt update
-    sudo apt install -y qemu-user-static debootstrap binfmt-support
+name: Docker Build Playerctl for Armbian (Docker)
 
-    # 创建 ARM64 根文件系统
-    sudo debootstrap --arch=arm64 focal rootfs http://ports.ubuntu.com/
+on:
+  push:
+    branches:
+      - main
+  pull_request:
 
-    # 复制 QEMU 到 `rootfs`
-    sudo cp /usr/bin/qemu-aarch64-static rootfs/usr/bin/
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-- name: 进入 `arm64` Ubuntu 并安装依赖
-  run: |
-    sudo chroot rootfs /bin/bash -c "
-      apt update &&
-      apt install -y build-essential meson ninja-build
-      apt install -y libglib2.0-dev libgobject-2.0-dev libgio-2.0-dev
-      apt install -y libdbus-1-dev libjson-glib-dev libreadline-dev bash-completion
-    "
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 在 `arm64` Docker 容器中编译
+        run: |
+          docker run --rm -v $(pwd):/workspace -w /workspace arm64v8/ubuntu bash -c "
+            apt update &&
+            apt install -y build-essential meson ninja-build &&
+            apt install -y libglib2.0-dev libgobject-2.0-dev libgio-2.0-dev &&
+            apt install -y libdbus-1-dev libjson-glib-dev libreadline-dev bash-completion &&
+            meson setup build &&
+            ninja -C build
+          "
