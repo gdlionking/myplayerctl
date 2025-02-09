@@ -1,73 +1,44 @@
-name: 2 Build Playerctl for ARM64
+name: 1 Build Playerctl for Armbian
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
-    
+    runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v4
-      with:
-        repository: 'altdesktop/playerctl'
-        submodules: 'recursive'
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          gcc-aarch64-linux-gnu \
-          g++-aarch64-linux-gnu \
-          meson \
-          ninja-build \
-          pkg-config \
-          crossbuild-essential-arm64 \
-          libglib2.0-dev \
-          gobject-introspection \
-          libtool
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-    - name: Set up cross-compilation environment
-      run: |
-        cat << EOF > cross-file.txt
-        [binaries]
-        c = 'aarch64-linux-gnu-gcc'
-        cpp = 'aarch64-linux-gnu-g++'
-        ar = 'aarch64-linux-gnu-ar'
-        strip = 'aarch64-linux-gnu-strip'
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-        [host_machine]
-        system = 'linux'
-        cpu_family = 'aarch64'
-        cpu = 'armv8'
-        endian = 'little'
-        EOF
+      - name: Pull Armbian Build Environment
+        run: |
+          docker pull armbian/build:latest
 
-    - name: Configure build
-      run: |
-        meson setup builddir \
-          --cross-file cross-file.txt \
-          -Dgtk-doc=false \
-          -Dintrospection=false
+      - name: Build Playerctl for Armbian
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace armbian/build:latest \
+            bash -c "
+            apt update && apt install -y build-essential meson ninja-build pkg-config libglib2.0-dev libdbus-1-dev libgobject-introspection-dev libjson-glib-dev
+            git clone https://github.com/altdesktop/playerctl.git && cd playerctl
+            meson build --prefix=/usr && ninja -C build && ninja -C build install
+            cp build/playerctl /workspace/playerctl-armbian
+            "
 
-    - name: Build
-      run: ninja -C builddir
-
-    - name: Create package
-      run: |
-        mkdir -p artifact/bin artifact/lib
-        cp builddir/playerctl/playerctl artifact/bin/
-        cp builddir/playerctl/playerctld artifact/bin/
-        cp builddir/playerctl/libplayerctl.so* artifact/lib/
-        aarch64-linux-gnu-strip artifact/bin/* artifact/lib/*
-        tar czf playerctl-arm64.tar.gz -C artifact .
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: playerctl-arm64
-        path: playerctl-arm64.tar.gz
+      - name: Upload compiled binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: playerctl-armbian
+          path: playerctl-armbian
