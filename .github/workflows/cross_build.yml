@@ -1,0 +1,53 @@
+name: Cross-build playerctl for ARM64
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  cross-build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          meson \
+          ninja-build \
+          pkg-config \
+          gcc-aarch64-linux-gnu \
+          g++-aarch64-linux-gnu \
+          libglib2.0-dev:arm64 \
+          gobject-introspection:arm64 \
+          libgirepository1.0-dev:arm64
+
+    - name: Set up cross-compilation environment
+      run: |
+        export CC=aarch64-linux-gnu-gcc
+        export CXX=aarch64-linux-gnu-g++
+        export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+
+    - name: Configure and build
+      run: |
+        meson build --cross-file cross-file.txt
+        ninja -C build
+
+    - name: Package the build artifacts
+      run: |
+        mkdir -p artifacts
+        cp -r build/* artifacts/
+      shell: bash
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: playerctl-arm64
+        path: artifacts/
