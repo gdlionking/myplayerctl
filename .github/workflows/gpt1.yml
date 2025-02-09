@@ -1,4 +1,4 @@
-name: Build Playerctl for Armbian ARM64
+name: GPT Build Playerctl for Armbian ARM64
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y crossbuild-essential-arm64 meson ninja-build git pkg-config-aarch64-linux-gnu
+          sudo apt install -y crossbuild-essential-arm64 meson ninja-build git pkg-config
 
       - name: Create Meson cross-file for ARM64
         run: |
@@ -29,7 +29,7 @@ jobs:
           cpp = '/usr/bin/aarch64-linux-gnu-g++'
           ar = '/usr/bin/aarch64-linux-gnu-ar'
           strip = '/usr/bin/aarch64-linux-gnu-strip'
-          pkg-config = '/usr/bin/aarch64-linux-gnu-pkg-config'
+          pkg-config = '/usr/bin/pkg-config'
 
           [host_machine]
           system = 'linux'
@@ -48,7 +48,7 @@ jobs:
       - name: Build Playerctl for ARM64
         run: |
           cd playerctl
-          export PKG_CONFIG_PATH=/usr/aarch64-linux-gnu/lib/pkgconfig:$PKG_CONFIG_PATH
+          export PKG_CONFIG_PATH=/usr/aarch64-linux-gnu/lib/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig:$PKG_CONFIG_PATH
           meson setup build --cross-file ../arm64-cross.txt
           ninja -C build
 
