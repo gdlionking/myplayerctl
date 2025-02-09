@@ -28,63 +28,58 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
-      - name: Build playerctl for ARM64
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/arm64
-          push: false
-          load: true
-          tags: playerctl-arm64:latest
-      
-      - name: Extract build artifacts
+      - name: Build and run container
         run: |
-          # Create a container from the image
-          docker create --name temp playerctl-arm64:latest
+          # Build the image
+          docker buildx build --platform linux/arm64 --load -t playerctl-arm64:latest .
           
-          # Create directory for artifacts
+          # Run container in background with sleep command
+          docker run -d --name playerctl-container playerctl-arm64:latest sleep infinity
+          
+          # Wait a moment for container to start
+          sleep 5
+          
+          # Create artifacts directory
           mkdir -p artifacts
           
-          # List files in container for debugging
-          echo "Listing /usr/lib contents:"
-          docker exec temp ls -la /usr/lib || true
-          echo "Listing /usr/bin contents:"
-          docker exec temp ls -la /usr/bin || true
+          # List contents for debugging
+          echo "Container filesystem contents:"
+          docker exec playerctl-container find /usr -name "libplayerctl*"
+          docker exec playerctl-container find /usr -name "playerctl"
           
-          # Copy the built files from the container
-          echo "Copying library files..."
-          docker cp temp:/usr/lib/x86_64-linux-gnu/libplayerctl.so.2.0.0 artifacts/ || \
-          docker cp temp:/usr/lib/aarch64-linux-gnu/libplayerctl.so.2.0.0 artifacts/ || \
-          docker cp temp:/usr/lib/libplayerctl.so.2.0.0 artifacts/ || \
-          echo "Failed to copy library file"
+          # Copy files from container
+          echo "Copying build artifacts..."
+          docker cp playerctl-container:/usr/lib/. artifacts/
+          docker cp playerctl-container:/usr/bin/playerctl artifacts/
           
-          echo "Copying executable..."
-          docker cp temp:/usr/bin/playerctl artifacts/ || \
-          echo "Failed to copy executable"
-          
-          # Create symbolic links
-          cd artifacts
-          if [ -f "libplayerctl.so.2.0.0" ]; then
-            ln -s libplayerctl.so.2.0.0 libplayerctl.so.2
-            ln -s libplayerctl.so.2 libplayerctl.so
-          fi
+          # Clean up
+          docker stop playerctl-container
+          docker rm playerctl-container
           
           # List copied files
-          echo "Contents of artifacts directory:"
+          echo "Copied artifacts:"
           ls -la artifacts/
+      
+      - name: Process artifacts
+        run: |
+          # Find and organize the files
+          mkdir -p artifacts/processed
           
-          # Clean up container
-          docker rm temp
+          # Find the library files
+          find artifacts -name "libplayerctl*" -type f -exec cp {} artifacts/processed/ \;
+          find artifacts -name "playerctl" -type f -exec cp {} artifacts/processed/ \;
+          
+          echo "Final artifacts:"
+          ls -la artifacts/processed/
       
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: playerctl-arm64-build
-          path: artifacts/
+          path: artifacts/processed/
           retention-days: 7
 
       - name: Check final artifacts
         run: |
           echo "Final build artifacts:"
-          ls -lah artifacts/
+          ls -lah artifacts/processed/
